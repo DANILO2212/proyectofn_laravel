@@ -1,0 +1,53 @@
+# Usar una imagen base oficial con PHP y Composer
+FROM php:8.1-fpm
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    zip \
+    unzip \
+    libpq-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    nodejs \
+    npm \
+    && docker-php-ext-install pdo_mysql mbstring bcmath opcache zip
+
+# Instalar Composer
+COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
+
+# Configurar directorio de trabajo
+WORKDIR /var/www
+
+# Copiar archivos de la aplicación
+COPY . .
+
+# Instalar dependencias de PHP con Composer
+RUN composer install --no-dev --optimize-autoloader
+
+# Instalar dependencias de Node.js y construir assets
+RUN npm install && npm run build
+
+# Permisos para las carpetas necesarias
+RUN chmod -R 777 storage/ bootstrap/cache
+
+# Crear enlaces simbólicos
+RUN php artisan storage:link
+
+# Ejecutar optimizaciones de Laravel
+RUN php artisan optimize
+
+# Ejecutar migraciones forzadamente (ten cuidado con esto en producción)
+RUN php artisan migrate --force
+
+# Cambiar permisos finales
+RUN chown -R www-data:www-data /var/www
+RUN chmod -R 777 storage/ bootstrap/cache
+
+# Exponer el puerto 9000 (usado por PHP-FPM)
+EXPOSE 9000
+
+# Comando para iniciar PHP-FPM
+CMD ["php-fpm"]
